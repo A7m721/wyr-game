@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>تفضّل إيه؟ 🤔</title>
+<meta name="description" content="لعبة اختيارات بين اتنين: كل واحد يختار والنتيجة تظهر، وفي الآخر نسبة التوافق بينكم.">
+<meta name="theme-color" content="#3b5bfd">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="تفضّل إيه؟">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@500;700&display=swap">
+<style>
+:root{--ink:#14143a;--yel:#ffd93d;--pink:#ff6fb1;--grn:#2fd18b;--card:#fffdf5}
+*{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+body{background:radial-gradient(rgba(255,255,255,.14) 2px,transparent 2px) 0 0/26px 26px,#3b5bfd;color:#fff;font-family:Tajawal,system-ui,sans-serif;min-height:100vh;display:flex;justify-content:center;padding:calc(18px + env(safe-area-inset-top,0px)) 14px calc(40px + env(safe-area-inset-bottom,0px))}
+main{width:100%;max-width:420px;text-align:center}
+h1{font:400 34px Lalezar,Tajawal,sans-serif;text-shadow:3px 3px 0 var(--ink)}
+p.t{font-weight:700;margin:6px 0 18px;line-height:1.7}
+.btn{display:block;width:100%;font:400 22px Lalezar,Tajawal,sans-serif;background:var(--yel);color:var(--ink);border:4px solid var(--ink);border-radius:16px;padding:10px 18px;box-shadow:5px 5px 0 var(--ink);cursor:pointer;margin-top:14px}
+.btn.alt{background:#fff;font-size:18px}
+.btn:active{transform:translate(4px,4px);box-shadow:1px 1px 0 var(--ink)}
+.btn:disabled{opacity:.5}
+.row{display:flex;gap:8px;margin-top:12px}
+input{flex:1;min-width:0;padding:10px;border:3px solid var(--ink);border-radius:12px;font:700 18px Tajawal,sans-serif;text-align:center;direction:ltr}
+.sm{font:700 15px Tajawal,sans-serif;background:var(--yel);color:var(--ink);border:3px solid var(--ink);border-radius:12px;padding:6px 14px;cursor:pointer}
+.cnt{font-weight:700;margin-bottom:14px}
+.opt{position:relative;display:block;width:100%;min-height:120px;margin-top:16px;padding:22px 16px;border:4px solid var(--ink);border-radius:24px;box-shadow:6px 6px 0 var(--ink);font:400 24px/1.5 Lalezar,Tajawal,sans-serif;color:var(--ink);cursor:pointer}
+.o0{background:var(--yel)}.o1{background:var(--pink)}
+.opt:disabled{cursor:default}
+.opt.me{outline:5px solid #fff;outline-offset:3px}
+.tags{display:flex;gap:6px;justify-content:center;margin-top:10px;flex-wrap:wrap}
+.tag{background:var(--ink);color:#fff;border-radius:99px;padding:2px 12px;font:700 13px Tajawal,sans-serif}
+.res{margin-top:16px;font:400 24px Lalezar,Tajawal,sans-serif}
+.note{margin-top:14px;font-weight:700;min-height:24px}
+.err{color:var(--yel)}
+.big{font:400 80px Lalezar,sans-serif;text-shadow:4px 4px 0 var(--ink)}
+.code{font:700 30px monospace;background:#fff;color:var(--ink);border:3px solid var(--ink);border-radius:12px;padding:6px 16px;display:inline-block;letter-spacing:4px}
+</style>
+</head>
+<body>
+<main id="v"></main>
+<script src="more.js"></script>
+<script>
+/* Would-you-rather. Same phone, or an online room on its own Firebase project (REST, no SDK).
+   Room data: sd (shuffle seed), i (current question), a/<question>/<seat> = 0|1, c (created). */
+const DB='https://foodapp-487b4-default-rtdb.firebaseio.com/wyr/rooms/',N=20;
+const Q=[
+["رحلات بسيطة كل شهر","رحلة كبيرة واحدة في السنة"],["أكلة واحدة مفضلة مدى الحياة","كل الأكل ما عدا أكلتك المفضلة"],
+["الصيف طول السنة","الشتا طول السنة"],["النوم بدري والصحيان بدري","السهر لحد الفجر والنوم للضهر"],
+["بحر ومصيف","جبل وهدوء"],["فلوس كتير وشغل ممل","فلوس أقل وشغل ممتع"],
+["معرفة مستقبلك كله","مفاجأة مفتوحة من غير ما تعرف"],["صديق واحد مقرّب جدًا","شلة كبيرة وأصحاب كتير"],
+["رسائل مكتوبة بس","مكالمات صوت بس"],["موبايل ممتاز من غير نت","نت سريع على موبايل قديم"],
+["حلويات بس","مالح بس"],["قهوة مدى الحياة","شاي مدى الحياة"],
+["بيت كبير بعيد عن المدينة","شقة صغيرة في قلب المدينة"],["نفس الأكلة المفضلة كل يوم","أكلة جديدة كل يوم"],
+["إجادة كل لغات العالم","فهم لغة الحيوانات"],["قوة الطيران","قوة الاختفاء"],
+["رحلة مع أهلك","رحلة مع أصحابك"],["الشغل من البيت دايمًا","الشغل من مكتب جميل دايمًا"],
+["يوم كامل من غير موبايل","يوم كامل من غير موسيقى"],["هدية غالية مفاجئة","هدية بسيطة مفكَّر فيها"],
+["فيلم رعب","فيلم كوميدي"],["عربية فخمة من غير جراج","عربية عادية بجراج"],
+["يوم كله ضحك","يوم كله هدوء"],["الرجوع للماضي","رؤية المستقبل"],
+["الوصول دايمًا قبل الميعاد بـ ١٠ دقايق","التأخير دايمًا ١٠ دقايق ومحدش يزعل"],["أغنية واحدة في دماغك طول اليوم","صمت تام طول اليوم"],
+["مطعم فخم مرة في الشهر","أكل شارع حلو كل أسبوع"],["تلات أصدقاء حقيقيين","١٠٠٠ متابع مشهور"],
+["عيد وسط العيلة كلها","عيد برحلة مع شخص واحد"],["ملابس مريحة دايمًا","ملابس شيك دايمًا"],
+["صباح هادي من غير كلام","صباح مليان كلام وضحك"],["حياة روتينية مستقرة","حياة مغامرات غير مضمونة"],
+["كتاب جميل","فيلم جميل"],["الأكل باليد دايمًا","الأكل بالشوكة دايمًا"],
+["صوت جميل في الغناء","موهبة في الرسم"],["مطر طول الأسبوع","شمس طول الأسبوع"],
+["قطة","كلب"],["شوكولاتة","آيس كريم"],
+["رحلة بالقطر","رحلة بالطيارة"],["التخطيط لكل حاجة","العفوية في كل حاجة"],
+["مهارة جديدة كل شهر","إتقان مهارة واحدة في سنة"],["معرفة أسرار الناس","إن محدش يعرف أسرارك"],
+["حفلة صاخبة","قعدة هادية"],["ليلة تخييم تحت النجوم","ليلة في فندق فخم"],
+["طبخ كل أكلك بنفسك","طلب أكلك جاهز دايمًا"],["رد سريع على الرسايل","رد متأخر بس مدروس"],
+["صراحة جارحة أحيانًا","مجاملة لطيفة دايمًا"],["هدية بتتفتح بدري","هدية بتستنى وقتها"],
+["ركوب أفعوانية","قعدة على القهوة"],["أغنية قديمة جميلة","أغنية جديدة حلوة"],
+["ثلاث أمنيات صغيرة بتتحقق","أمنية واحدة كبيرة بتتحقق"],["يوم كامل ممنوع فيه الشكوى","يوم كامل ممنوع فيه السخرية"],
+["شقة مليانة نباتات","شقة مليانة كتب"],["الإفطار أحلى وجبة","العشا أحلى وجبة"],
+["نكتة تضحك الكل","كلمة تفرّح شخص واحد"],["بدايات جديدة دايمًا","نهايات سعيدة دايمًا"],...(window.MORE||[])];
+const $=s=>document.querySelector(s),V=$('#v');
+const rng=a=>()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const deck=sd=>{const r=rng(Math.floor(sd/1000)),a=[...Q.keys()],g=sd%1000;for(let k=a.length-1;k>0;k--){const j=Math.floor(r()*(k+1));[a[k],a[j]]=[a[j],a[k]]}return Array.from({length:N},(_,k)=>a[(g*N+k)%a.length])};   /* sd = series*1000 + game: a new game takes the next slice, so questions do not repeat until the bank is used up */
+const nextSd=s=>Math.floor(s/1000)*1000+(s%1000+1)%1000;
+function newSd(){let s=0;try{s=+localStorage.getItem('wyr_sd')||0}catch(e){}s=nextSd(s||rnd());try{localStorage.setItem('wyr_sd',s)}catch(e){}return s}
+const CODE=/^[a-z0-9]{4,10}$/,rnd=()=>Math.floor(Math.random()*1e9);
+let S={m:'',code:'',seat:0,sd:0,i:0,a:{},turn:0,hand:false,err:'',tm:null,last:''};
+
+/* ---------- online ---------- */
+const url=(p)=>DB+S.code+(p||'')+'.json';
+async function api(method,p,body){const r=await fetch(url(p),{method,body:body===undefined?undefined:JSON.stringify(body)});if(!r.ok)throw new Error(r.status);return r.json()}
+async function create(){
+  askNotif();try{let code='';for(let k=0;k<5;k++){const a='abcdefghjkmnpqrstuvwxyz23456789';code='';for(let j=0;j<5;j++)code+=a[Math.floor(Math.random()*a.length)];S.code=code;if(!(await api('GET','')))break}
+    const sd=newSd();await api('PUT','',{sd,i:0,c:Date.now()});S={...S,m:'online',seat:0,sd,i:0,a:{},err:''};localStorage.setItem('wyr_room',S.code+':0');loop()}
+  catch(e){S.err='مقدرناش نوصل لسيرفر الغرفة. اتأكد من النت وقواعد Firebase.';R()}
+}
+async function join(code){
+  code=String(code||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(!CODE.test(code)){S.err='الكود مش صح.';return R()}
+  S.code=code;askNotif();
+  try{const d=await api('GET','');if(!d||d.sd==null){S.code='';S.err='مفيش غرفة بالكود ده.';return R()}
+    const saved=(localStorage.getItem('wyr_room')||'').split(':');const seat=saved[0]===code?+saved[1]:1;
+    S={...S,m:'online',seat,sd:d.sd,i:d.i||0,a:d.a||{},err:''};localStorage.setItem('wyr_room',code+':'+seat);loop()}
+  catch(e){S.code='';S.err='مقدرناش نوصل لسيرفر الغرفة. اتأكد من النت وقواعد Firebase.';R()}
+}
+function loop(){clearInterval(S.tm);R();S.tm=setInterval(poll,1500)}
+async function poll(){
+  if(S.m!=='online')return;
+  try{const d=await api('GET','');if(!d)return;const k=JSON.stringify([d.sd,d.i,d.a]);if(k===S.last)return;S.last=k;S.sd=d.sd;S.i=d.i||0;S.a=d.a||{};R()}catch(e){}
+}
+const put=(p,v)=>api('PUT',p,v).catch(()=>{S.err='النت ضعيف، حاول تاني.';R()});
+
+/* ---------- alerts ---------- */
+let SND=localStorage.getItem('wyr_snd')!=='0',seen='',DP=null;const IOS=/iphone|ipad|ipod/i.test(navigator.userAgent||''),TITLE=document.title;
+function ping(msg){
+  if(SND){try{const c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.setValueAtTime(.2,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.5);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.5)}catch(e){}try{navigator.vibrate&&navigator.vibrate([150,80,150])}catch(e){}}
+  if(document.hidden){document.title='🔔 '+msg;try{if(window.Notification&&Notification.permission==='granted')new Notification('تفضّل إيه؟',{body:msg,icon:'icon-192.png'})}catch(e){}}
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)document.title=TITLE});
+const askNotif=()=>{try{if(window.Notification&&Notification.permission==='default')Notification.requestPermission()}catch(e){}};
+function watch(A,both,mine){
+  if(S.m!=='online')return;const o=val(A,1-S.seat),k=S.i+':'+(both?'b':o!=null&&mine==null?'o':'');
+  if(k.endsWith(':')||k===seen)return;seen=k;ping(both?'النتيجة ظهرت 👀':'التاني اختار، دورك! 🤔');
+}
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();DP=e;if(!S.m)home()});
+
+/* ---------- game ---------- */
+const val=(A,s)=>A&&A[s]!=null?A[s]:null;
+function pick(c){
+  const A=S.a[S.i]=S.a[S.i]||{};
+  if(S.m==='local'){A[S.turn]=c;if(S.turn===0){S.turn=1;S.hand=true}}
+  else{if(val(A,1-S.seat)!=null)seen=S.i+':b';A[S.seat]=c;put('/a/'+S.i+'/'+S.seat,c)}
+  R();
+}
+function next(){
+  if(S.m==='local'){S.i++;S.turn=0;S.hand=false;return R()}
+  S.i++;put('/i',S.i);R();
+}
+function again(){
+  if(S.m==='local')return start();
+  const sd=nextSd(S.sd);try{localStorage.setItem('wyr_sd',sd)}catch(e){}S.sd=sd;S.i=0;S.a={};S.last='';api('PUT','',{sd,i:0,c:Date.now()}).catch(()=>{});R();
+}
+function start(){clearInterval(S.tm);S={...S,m:'local',sd:newSd(),i:0,a:{},turn:0,hand:false,err:''};R()}
+function leave(){clearInterval(S.tm);try{localStorage.removeItem('wyr_room')}catch(e){}S={m:'',code:'',seat:0,sd:0,i:0,a:{},turn:0,hand:false,err:'',tm:null,last:''};R()}
+async function invite(){
+  const link=location.origin+location.pathname+'?room='+S.code,text='تعالى نلعب "تفضّل إيه؟" — كود الغرفة: '+S.code;
+  if(navigator.share){try{await navigator.share({title:'تفضّل إيه؟',text,url:link});return}catch(e){if(e.name==='AbortError')return}}
+  try{await navigator.clipboard.writeText(text+' '+link);S.err='';note('اتنسخ الرابط ✔')}catch(e){note(link)}
+}
+const note=t=>{const n=$('#n');if(n)n.textContent=t};
+
+/* ---------- screens ---------- */
+function R(){
+  if(!S.m)return home();
+  const d=deck(S.sd);
+  if(S.i>=N)return end(d);
+  const q=Q[d[S.i]],A=S.a[S.i]||{},a0=val(A,0),a1=val(A,1),both=a0!=null&&a1!=null,online=S.m==='online';
+  const mine=online?val(A,S.seat):null,names=online?['','']:['اللاعب ١','اللاعب ٢'];
+  watch(A,both,mine);
+  let body='',foot='';
+  if(!online&&S.hand){
+    body=`<div class="big">📱</div><p class="t">ادّي الموبايل للاعب التاني، وبلاش يبص على اختيار الأول</p><button class="btn" data-act="go">أنا جاهز</button>`;
+    V.innerHTML=head()+body;return;
+  }
+  const locked=online?(mine!=null):both;
+  const opts=[0,1].map(c=>{
+    const who=both?[a0===c?(online?(S.seat===0?'أنت':'التاني'):names[0]):'',a1===c?(online?(S.seat===1?'أنت':'التاني'):names[1]):''].filter(Boolean):[];
+    const me=online&&mine===c?' me':'';
+    return `<button class="opt o${c}${me}" data-c="${c}" ${locked?'disabled':''}>${q[c]}${who.length?`<div class="tags">${who.map(w=>`<span class="tag">${w}</span>`).join('')}</div>`:''}</button>`}).join('');
+  if(both)foot=`<div class="res">${a0===a1?'اتفقتوا ✅':'اختلفتوا 😄'}</div><button class="btn" data-act="next">${S.i>=N-1?'النتيجة 🎉':'السؤال اللي بعده'}</button>`;
+  else if(online&&mine!=null)foot=`<div class="note">في انتظار التاني…</div>`;
+  else if(!online)foot=`<div class="note">${S.turn===0?'دور اللاعب ١':'دور اللاعب ٢'}</div>`;
+  V.innerHTML=head()+`<div class="cnt">سؤال ${S.i+1} من ${N}</div>${opts}${foot}<div class="note err" id="n">${S.err||''}</div>${online?`<button class="sm" style="margin-top:18px" data-act="invite">دعوة 📤 (${S.code})</button> <button class="sm" data-act="leave">خروج</button>`:`<button class="sm" style="margin-top:18px" data-act="leave">الرئيسية</button>`}`;
+}
+const head=()=>`<div style="text-align:start"><button class="sm" data-act="snd">${SND?'🔔':'🔕'}</button></div><h1>تفضّل إيه؟ 🤔</h1>`;
+function home(){
+  V.innerHTML=head()+`<p class="t">كل واحد يختار من غير ما التاني يشوف، وفي الآخر نشوف توافقكم.</p>
+  <button class="btn" data-act="local">نفس الموبايل 📱</button>
+  <button class="btn alt" data-act="new">غرفة أونلاين جديدة 🌍</button>
+  <div class="row"><input id="rc" maxlength="10" placeholder="كود الغرفة" autocapitalize="off"><button class="sm" data-act="join">دخول</button></div>
+  ${DP?'<button class="btn alt" data-act="inst">ثبّت اللعبة 📲</button>':IOS?'<p class="t" style="margin-top:18px">للتثبيت على الآيفون: زرار المشاركة ثم «إضافة إلى الشاشة الرئيسية»</p>':''}
+  <div class="note err" id="n">${S.err||''}</div>`;
+}
+function end(d){
+  let m=0;for(let k=0;k<N;k++){const A=S.a[k]||{};if(val(A,0)!=null&&val(A,0)===val(A,1))m++}
+  const p=Math.round(m/N*100),msg=p>=80?'توأم! 😍':p>=60?'متوافقين جدًا 💙':p>=40?'اختلافكم حلو 😄':'عكس بعض تمامًا 😂';
+  V.innerHTML=head()+`<div class="big">${p}٪</div><div class="res">${msg}</div><p class="t">اتفقتوا في ${m} من ${N} سؤال</p><button class="btn" data-act="again">العبوا تاني</button><button class="sm" style="margin-top:18px" data-act="leave">الرئيسية</button>`;
+}
+V.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||b.disabled)return;
+  if(b.dataset.c!=null)return pick(+b.dataset.c);
+  const a=b.dataset.act;
+  if(a==='local')start();else if(a==='new')create();else if(a==='join')join($('#rc').value);
+  else if(a==='go'){S.hand=false;R()}else if(a==='next')next();else if(a==='again')again();
+  else if(a==='invite')invite();else if(a==='leave')leave();
+  else if(a==='snd'){SND=!SND;try{localStorage.setItem('wyr_snd',SND?'1':'0')}catch(e){}R()}
+  else if(a==='inst'&&DP){DP.prompt();DP.userChoice.finally(()=>{DP=null;R()})}
+});
+(function(){
+  let c='';try{c=new URLSearchParams(location.search).get('room')||''}catch(e){}
+  if(!c){try{const s=localStorage.getItem('wyr_room');if(s)c=s.split(':')[0]}catch(e){}}
+  if(c){try{history.replaceState(null,'',location.pathname)}catch(e){}join(c)}else home();
+})();
+try{if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+</script>
+</body>
+</html>
