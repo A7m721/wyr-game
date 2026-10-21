@@ -38,9 +38,23 @@ input{flex:1;min-width:0;padding:10px;border:3px solid var(--ink);border-radius:
 .err{color:var(--yel)}
 .big{font:400 80px Lalezar,sans-serif;text-shadow:4px 4px 0 var(--ink)}
 .code{font:700 30px monospace;background:#fff;color:var(--ink);border:3px solid var(--ink);border-radius:12px;padding:6px 16px;display:inline-block;letter-spacing:4px}
+.menubtn{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;z-index:20;font:700 14px Tajawal,sans-serif;background:#fff;color:var(--ink);border:3px solid var(--ink);border-radius:99px;padding:6px 14px;box-shadow:3px 3px 0 var(--ink);cursor:pointer}
+.scrim{position:fixed;inset:0;background:rgba(10,10,40,.55);z-index:30}
+.drawer{position:fixed;top:0;bottom:0;left:0;width:min(88vw,340px);background:var(--card);color:var(--ink);border-right:4px solid var(--ink);z-index:31;padding:calc(14px + env(safe-area-inset-top,0px)) 14px 20px;overflow:auto;text-align:start}
+.dhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:18px}
+.dx{border:3px solid var(--ink);background:#fff;color:var(--ink);border-radius:12px;width:38px;height:38px;font-size:16px;cursor:pointer}
+.gm{display:block;width:100%;background:#fff;color:var(--ink);border:3px solid var(--ink);border-radius:99px;padding:8px 14px;font:700 15px Tajawal,sans-serif;margin-top:10px;cursor:pointer;text-align:start}
+.hint{margin-top:12px;font-size:13px;font-weight:700;line-height:1.8}
+.lbx{margin-top:12px;background:var(--card);color:var(--ink);border:3px solid var(--ink);border-radius:16px;box-shadow:4px 4px 0 var(--ink);padding:12px;text-align:start}
+.lbx p{font-size:13px;font-weight:700;line-height:1.8}
+.nmi{direction:rtl}
+main{padding-top:30px}
 </style>
 </head>
 <body>
+<button class="menubtn" id="menu" aria-expanded="false" aria-controls="drawer">☰ الإعدادات</button>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden><div class="dhead"><b>الإعدادات</b><button class="dx" id="dx" aria-label="إغلاق">✕</button></div><div id="dbody"></div></aside>
 <main id="v"></main>
 <script src="more.js"></script>
 <script>
@@ -82,29 +96,41 @@ const deck=sd=>{const r=rng(Math.floor(sd/1000)),a=[...Q.keys()],g=sd%1000;for(l
 const nextSd=s=>Math.floor(s/1000)*1000+(s%1000+1)%1000;
 function newSd(){let s=0;try{s=+localStorage.getItem('wyr_sd')||0}catch(e){}s=nextSd(s||rnd());try{localStorage.setItem('wyr_sd',s)}catch(e){}return s}
 const CODE=/^[a-z0-9]{4,10}$/,rnd=()=>Math.floor(Math.random()*1e9);
+const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clean=t=>String(t||'').replace(/\s+/g,' ').trim().slice(0,20);
+const saved=()=>{try{return JSON.parse(localStorage.getItem('wyr_names')||'[]')}catch(e){return[]}};
+const keep=a=>{try{localStorage.setItem('wyr_names',JSON.stringify(a))}catch(e){}};
+const nm=x=>esc((S.nm&&S.nm[x])||(S.m==='local'?['اللاعب ١','اللاعب ٢'][x]:x===S.seat?'أنت':'التاني'));
+const plain=x=>(S.nm&&S.nm[x])||'التاني';
+const nmObj=()=>{const o={};[0,1].forEach(x=>{if(S.nm&&S.nm[x])o[x]=S.nm[x]});return o};
+const fromRoom=d=>[clean(d.n&&d.n[0]),clean(d.n&&d.n[1])];
 let S={m:'',code:'',seat:0,sd:0,i:0,a:{},turn:0,hand:false,err:'',tm:null,last:''};
 
 /* ---------- online ---------- */
 const url=(p)=>DB+S.code+(p||'')+'.json';
 async function api(method,p,body){const r=await fetch(url(p),{method,body:body===undefined?undefined:JSON.stringify(body)});if(!r.ok)throw new Error(r.status);return r.json()}
-async function create(){
-  askNotif();try{let code='';for(let k=0;k<5;k++){const a='abcdefghjkmnpqrstuvwxyz23456789';code='';for(let j=0;j<5;j++)code+=a[Math.floor(Math.random()*a.length)];S.code=code;if(!(await api('GET','')))break}
-    const sd=newSd();await api('PUT','',{sd,i:0,c:Date.now()});S={...S,m:'online',seat:0,sd,i:0,a:{},err:''};localStorage.setItem('wyr_room',S.code+':0');loop()}
+async function create(me){
+  me=clean(me||($('#nm')&&$('#nm').value)||saved()[0]);
+  if(!me){S.ask='new';S.err='';return R()}
+  keep([me,saved()[1]||'']);askNotif();try{let code='';for(let k=0;k<5;k++){const a='abcdefghjkmnpqrstuvwxyz23456789';code='';for(let j=0;j<5;j++)code+=a[Math.floor(Math.random()*a.length)];S.code=code;if(!(await api('GET','')))break}
+    const sd=newSd();await api('PUT','',{sd,i:0,c:Date.now(),n:{0:me}});S={...S,m:'online',seat:0,sd,i:0,a:{},err:'',nm:[me,''],me};localStorage.setItem('wyr_room',S.code+':0');loop()}
   catch(e){S.err='مقدرناش نوصل لسيرفر الغرفة. اتأكد من النت وقواعد Firebase.';R()}
 }
-async function join(code){
+async function join(code,me){
   code=String(code||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   if(!CODE.test(code)){S.err='الكود مش صح.';return R()}
-  S.code=code;askNotif();
+  me=clean(me||($('#nm')&&$('#nm').value)||saved()[0]);
+  if(!me){S.ask=code;S.err='';return R()}
+  keep([me,saved()[1]||'']);S.code=code;askNotif();
   try{const d=await api('GET','');if(!d||d.sd==null){S.code='';S.err='مفيش غرفة بالكود ده.';return R()}
     const saved=(localStorage.getItem('wyr_room')||'').split(':');const seat=saved[0]===code?+saved[1]:1;
-    S={...S,m:'online',seat,sd:d.sd,i:d.i||0,a:d.a||{},err:''};localStorage.setItem('wyr_room',code+':'+seat);loop()}
+    const nms=fromRoom(d);nms[seat]=me;await api('PUT','/n/'+seat,me);S={...S,m:'online',seat,sd:d.sd,i:d.i||0,a:d.a||{},err:'',nm:nms,me};localStorage.setItem('wyr_room',code+':'+seat);loop()}
   catch(e){S.code='';S.err='مقدرناش نوصل لسيرفر الغرفة. اتأكد من النت وقواعد Firebase.';R()}
 }
 function loop(){clearInterval(S.tm);R();S.tm=setInterval(poll,1500)}
 async function poll(){
   if(S.m!=='online')return;
-  try{const d=await api('GET','');if(!d)return;const k=JSON.stringify([d.sd,d.i,d.a]);if(k===S.last)return;S.last=k;S.sd=d.sd;S.i=d.i||0;S.a=d.a||{};R()}catch(e){}
+  try{const d=await api('GET','');if(!d)return;const k=JSON.stringify([d.sd,d.i,d.a,d.n]);if(k===S.last)return;S.last=k;S.sd=d.sd;S.i=d.i||0;S.a=d.a||{};S.nm=fromRoom(d);if(S.me&&!S.nm[S.seat])S.nm[S.seat]=S.me;R()}catch(e){}
 }
 const put=(p,v)=>api('PUT',p,v).catch(()=>{S.err='النت ضعيف، حاول تاني.';R()});
 
@@ -118,9 +144,9 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)document.t
 const askNotif=()=>{try{if(window.Notification&&Notification.permission==='default')Notification.requestPermission()}catch(e){}};
 function watch(A,both,mine){
   if(S.m!=='online')return;const o=val(A,1-S.seat),k=S.i+':'+(both?'b':o!=null&&mine==null?'o':'');
-  if(k.endsWith(':')||k===seen)return;seen=k;ping(both?'النتيجة ظهرت 👀':'التاني اختار، دورك! 🤔');
+  if(k.endsWith(':')||k===seen)return;seen=k;ping(both?'النتيجة ظهرت 👀':plain(1-S.seat)+' اختار، دورك! 🤔');
 }
-addEventListener('beforeinstallprompt',e=>{e.preventDefault();DP=e;if(!S.m)home()});
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();DP=e});
 
 /* ---------- game ---------- */
 const val=(A,s)=>A&&A[s]!=null?A[s]:null;
@@ -135,10 +161,10 @@ function next(){
   S.i++;put('/i',S.i);R();
 }
 function again(){
-  if(S.m==='local')return start();
-  const sd=nextSd(S.sd);try{localStorage.setItem('wyr_sd',sd)}catch(e){}S.sd=sd;S.i=0;S.a={};S.last='';api('PUT','',{sd,i:0,c:Date.now()}).catch(()=>{});R();
+  if(S.m==='local'){S={...S,sd:newSd(),i:0,a:{},turn:0,hand:false,err:''};return R()}
+  const sd=nextSd(S.sd);try{localStorage.setItem('wyr_sd',sd)}catch(e){}S.sd=sd;S.i=0;S.a={};S.last='';api('PUT','',{sd,i:0,c:Date.now(),n:nmObj()}).catch(()=>{});R();
 }
-function start(){clearInterval(S.tm);S={...S,m:'local',sd:newSd(),i:0,a:{},turn:0,hand:false,err:''};R()}
+function start(){clearInterval(S.tm);S={...S,m:'local',sd:newSd(),i:0,a:{},turn:0,hand:false,err:'',setup:true,nm:['','']};R()}
 function leave(){clearInterval(S.tm);try{localStorage.removeItem('wyr_room')}catch(e){}S={m:'',code:'',seat:0,sd:0,i:0,a:{},turn:0,hand:false,err:'',tm:null,last:''};R()}
 async function invite(){
   const link=location.origin+location.pathname+'?room='+S.code,text='تعالى نلعب "تفضّل إيه؟" — كود الغرفة: '+S.code;
@@ -149,6 +175,8 @@ const note=t=>{const n=$('#n');if(n)n.textContent=t};
 
 /* ---------- screens ---------- */
 function R(){
+  if(S.ask)return askScreen();
+  if(S.setup)return setupScreen();
   if(!S.m)return home();
   const d=deck(S.sd);
   if(S.i>=N)return end(d);
@@ -157,43 +185,67 @@ function R(){
   watch(A,both,mine);
   let body='',foot='';
   if(!online&&S.hand){
-    body=`<div class="big">📱</div><p class="t">ادّي الموبايل للاعب التاني، وبلاش يبص على اختيار الأول</p><button class="btn" data-act="go">أنا جاهز</button>`;
+    body=`<div class="big">📱</div><p class="t">ادّي الموبايل لـ ${nm(1)}، وبلاش يبص على اختيار ${nm(0)}</p><button class="btn" data-act="go">أنا جاهز</button>`;
     V.innerHTML=head()+body;return;
   }
   const locked=online?(mine!=null):both;
   const opts=[0,1].map(c=>{
-    const who=both?[a0===c?(online?(S.seat===0?'أنت':'التاني'):names[0]):'',a1===c?(online?(S.seat===1?'أنت':'التاني'):names[1]):''].filter(Boolean):[];
+    const who=both?[0,1].filter(x=>val(A,x)===c).map(x=>nm(x)+(online&&x===S.seat?' (أنت)':'')):[];
     const me=online&&mine===c?' me':'';
     return `<button class="opt o${c}${me}" data-c="${c}" ${locked?'disabled':''}>${q[c]}${who.length?`<div class="tags">${who.map(w=>`<span class="tag">${w}</span>`).join('')}</div>`:''}</button>`}).join('');
   if(both)foot=`<div class="res">${a0===a1?'اتفقتوا ✅':'اختلفتوا 😄'}</div><button class="btn" data-act="next">${S.i>=N-1?'النتيجة 🎉':'السؤال اللي بعده'}</button>`;
-  else if(online&&mine!=null)foot=`<div class="note">في انتظار التاني…</div>`;
-  else if(!online)foot=`<div class="note">${S.turn===0?'دور اللاعب ١':'دور اللاعب ٢'}</div>`;
+  else if(online&&mine!=null)foot=`<div class="note">في انتظار ${nm(1-S.seat)}…</div>`;
+  else if(!online)foot=`<div class="note">دور ${nm(S.turn)}</div>`;
   V.innerHTML=head()+`<div class="cnt">سؤال ${S.i+1} من ${N}</div>${opts}${foot}<div class="note err" id="n">${S.err||''}</div>${online?`<button class="sm" style="margin-top:18px" data-act="invite">دعوة 📤 (${S.code})</button> <button class="sm" data-act="leave">خروج</button>`:`<button class="sm" style="margin-top:18px" data-act="leave">الرئيسية</button>`}`;
 }
-const head=()=>`<div style="text-align:start"><button class="sm" data-act="snd">${SND?'🔔':'🔕'}</button></div><h1>تفضّل إيه؟ 🤔</h1>`;
+const head=()=>`<h1>تفضّل إيه؟ 🤔</h1>`;
+function setupScreen(){
+  const v=saved();
+  V.innerHTML=head()+`<p class="t">اكتبوا أسماءكم</p><div class="lbx"><div class="row"><input class="nmi" id="n0" maxlength="20" placeholder="اللاعب ١" value="${esc(v[0]||'')}"></div><div class="row"><input class="nmi" id="n1" maxlength="20" placeholder="اللاعب ٢" value="${esc(v[1]||'')}"></div></div><button class="btn" data-act="begin">يلا نبدأ 🎴</button><button class="sm" style="margin-top:18px" data-act="leave">رجوع</button>`;
+}
+function askScreen(){
+  V.innerHTML=head()+`<p class="t">اكتب اسمك عشان التاني يشوفه</p><div class="lbx"><div class="row"><input class="nmi" id="nm2" maxlength="20" placeholder="اسمك" value="${esc(saved()[0]||'')}"></div></div><div class="note err">${S.err||''}</div><button class="btn" data-act="askgo">تمام</button><button class="sm" style="margin-top:18px" data-act="leave">رجوع</button>`;
+}
 function home(){
   V.innerHTML=head()+`<p class="t">كل واحد يختار من غير ما التاني يشوف، وفي الآخر نشوف توافقكم.</p>
-  <button class="btn" data-act="local">نفس الموبايل 📱</button>
-  <button class="btn alt" data-act="new">غرفة أونلاين جديدة 🌍</button>
-  <div class="row"><input id="rc" maxlength="10" placeholder="كود الغرفة" autocapitalize="off"><button class="sm" data-act="join">دخول</button></div>
-  ${DP?'<button class="btn alt" data-act="inst">ثبّت اللعبة 📲</button>':IOS?'<p class="t" style="margin-top:18px">للتثبيت على الآيفون: زرار المشاركة ثم «إضافة إلى الشاشة الرئيسية»</p>':''}
+  <button class="btn" data-act="local">ابدأ اللعب 🎴</button>
+  <button class="btn alt" data-act="onl" aria-expanded="${!!S.open}">🌍 العبوا من مكانين مختلفين</button>
+  ${S.open?`<div class="lbx"><p>اعمل غرفة وابعت الكود للتاني، أو ادخل بالكود اللي وصلك.</p><div class="row"><input class="nmi" id="nm" maxlength="20" placeholder="اسمك" value="${esc(saved()[0]||'')}"></div><div class="row"><button class="sm" data-act="new">غرفة جديدة</button></div><div class="row"><input id="rc" maxlength="10" placeholder="كود الغرفة" autocapitalize="off"><button class="sm" data-act="join">دخول</button></div></div>`:''}
   <div class="note err" id="n">${S.err||''}</div>`;
 }
 function end(d){
   let m=0;for(let k=0;k<N;k++){const A=S.a[k]||{};if(val(A,0)!=null&&val(A,0)===val(A,1))m++}
   const p=Math.round(m/N*100),msg=p>=80?'توأم! 😍':p>=60?'متوافقين جدًا 💙':p>=40?'اختلافكم حلو 😄':'عكس بعض تمامًا 😂';
-  V.innerHTML=head()+`<div class="big">${p}٪</div><div class="res">${msg}</div><p class="t">اتفقتوا في ${m} من ${N} سؤال</p><button class="btn" data-act="again">العبوا تاني</button><button class="sm" style="margin-top:18px" data-act="leave">الرئيسية</button>`;
+  V.innerHTML=head()+`<div class="big">${p}٪</div><div class="res">${msg}</div><p class="t">${nm(0)} و${nm(1)}<br>اتفقتوا في ${m} من ${N} سؤال</p><button class="btn" data-act="again">العبوا تاني</button><button class="sm" style="margin-top:18px" data-act="leave">الرئيسية</button>`;
 }
-V.addEventListener('click',e=>{
+const onClick=e=>{
   const b=e.target.closest('button');if(!b||b.disabled)return;
   if(b.dataset.c!=null)return pick(+b.dataset.c);
   const a=b.dataset.act;
   if(a==='local')start();else if(a==='new')create();else if(a==='join')join($('#rc').value);
   else if(a==='go'){S.hand=false;R()}else if(a==='next')next();else if(a==='again')again();
   else if(a==='invite')invite();else if(a==='leave')leave();
-  else if(a==='snd'){SND=!SND;try{localStorage.setItem('wyr_snd',SND?'1':'0')}catch(e){}R()}
-  else if(a==='inst'&&DP){DP.prompt();DP.userChoice.finally(()=>{DP=null;R()})}
-});
+  else if(a==='begin'){const n=[clean($('#n0').value),clean($('#n1').value)];keep(n);S.nm=n;S.setup=false;R()}
+  else if(a==='askgo'){const me=clean($('#nm2').value);if(!me){S.err='اكتب اسمك الأول.';return R()}const t=S.ask;S.ask=null;S.err='';t==='new'?create(me):join(t,me)}
+  else if(a==='onl'){S.open=!S.open;R()}
+  else if(a==='share')shareGame();
+  else if(a==='snd'){SND=!SND;try{localStorage.setItem('wyr_snd',SND?'1':'0')}catch(e){}fillDrawer()}
+  else if(a==='inst'&&DP){DP.prompt();DP.userChoice.finally(()=>{DP=null;fillDrawer()})}
+};
+V.addEventListener('click',onClick);$('#dbody').addEventListener('click',onClick);
+/* settings drawer */
+function fillDrawer(){
+  $('#dbody').innerHTML=`<button class="gm" data-act="snd">${SND?'🔊 الصوت والاهتزاز شغالين':'🔇 الصوت والاهتزاز مكتومين'}</button><button class="gm" data-act="share">📤 مشاركة اللعبة</button>${DP?'<button class="gm" data-act="inst">📲 ثبّت اللعبة</button>':''}${IOS&&!DP?'<p class="hint">للتثبيت على الآيفون: زرار المشاركة ثم «إضافة إلى الشاشة الرئيسية»</p>':''}`;
+}
+const openD=()=>{fillDrawer();$('#drawer').hidden=false;$('#scrim').hidden=false;$('#menu').setAttribute('aria-expanded','true')};
+const closeD=()=>{$('#drawer').hidden=true;$('#scrim').hidden=true;$('#menu').setAttribute('aria-expanded','false')};
+$('#menu').addEventListener('click',openD);$('#dx').addEventListener('click',closeD);$('#scrim').addEventListener('click',closeD);
+addEventListener('keydown',e=>{if(e.key==='Escape')closeD()});
+async function shareGame(){
+  const url=location.origin+location.pathname,text='تعالى نلعب "تفضّل إيه؟"';
+  if(navigator.share){try{await navigator.share({title:'تفضّل إيه؟',text,url});return}catch(e){if(e.name==='AbortError')return}}
+  try{await navigator.clipboard.writeText(text+' '+url);const b=$('#dbody [data-act=share]');if(b)b.textContent='اتنسخ الرابط ✔'}catch(e){}
+}
 (function(){
   let c='';try{c=new URLSearchParams(location.search).get('room')||''}catch(e){}
   if(!c){try{const s=localStorage.getItem('wyr_room');if(s)c=s.split(':')[0]}catch(e){}}
