@@ -10,7 +10,8 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="تفضّل إيه؟">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Tajawal:wght@500;700&display=swap"></noscript>
 <style>
 :root{--ink:#14143a;--yel:#ffd93d;--pink:#ff6fb1;--grn:#2fd18b;--card:#fffdf5}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -107,14 +108,37 @@ const fromRoom=d=>[clean(d.n&&d.n[0]),clean(d.n&&d.n[1])];
 let S={m:'',code:'',seat:0,sd:0,i:0,a:{},turn:0,hand:false,err:'',tm:null,last:''};
 
 /* ---------- online ---------- */
+const offMsg=()=>navigator.onLine===false?'مفيش نت دلوقتي. الأونلاين محتاج نت، وتقدر تلعب على نفس الموبايل.':null;
 const url=(p)=>DB+S.code+(p||'')+'.json';
-async function api(method,p,body){const r=await fetch(url(p),{method,body:body===undefined?undefined:JSON.stringify(body)});if(!r.ok)throw new Error(r.status);return r.json()}
+async function api(method,p,body){
+  const ac=new AbortController(),t=setTimeout(()=>ac.abort(),8000);
+  try{const r=await fetch(url(p),{method,body:body===undefined?undefined:JSON.stringify(body),signal:ac.signal});
+    if(!r.ok){let t='';try{t=(await r.text()).slice(0,80)}catch(e){}const e=new Error(r.status+' '+t);e.status=r.status;throw e}
+    return r.json()}finally{clearTimeout(t)}
+}
+/* weak or lost connection: my picks wait in a queue and are retried until they get through; the screen never loses them */
+let PQ={a:{},i:null,bad:0,off:0,timer:null};
+const resetQ=()=>{clearTimeout(PQ.timer);PQ={a:{},i:null,bad:0,off:0,timer:null}};
+const waiting=()=>S.m==='online'&&(PQ.off>=2||PQ.bad>0);
+const statusText=()=>waiting()?'النت ضعيف… بنحاول نتصل تاني ⏳':S.err||'';
+async function flush(){
+  clearTimeout(PQ.timer);if(S.m!=='online')return;
+  try{
+    for(const q of Object.keys(PQ.a)){await api('PUT','/a/'+q+'/'+S.seat,PQ.a[q]);delete PQ.a[q]}
+    if(PQ.i!=null){await api('PUT','/i',PQ.i);PQ.i=null}
+    PQ.bad=0;S.err='';
+  }catch(e){
+    if(e.status>=400&&e.status<500){PQ.a={};PQ.i=null;PQ.bad=0;S.err=(e.status===401||e.status===403?'قواعد Firebase رفضت الكتابة':'Firebase رفض الطلب')+' ['+(e.message||'').slice(0,70)+']'}
+    else{PQ.bad++;PQ.timer=setTimeout(flush,Math.min(1500*PQ.bad,8000))}
+  }
+  if(S.m==='online')R();
+}
 async function create(me){
   me=clean(me||($('#nm')&&$('#nm').value)||saved()[0]);
   if(!me){S.ask='new';S.err='';return R()}
   keep([me,saved()[1]||'']);askNotif();try{let code='';for(let k=0;k<5;k++){const a='abcdefghjkmnpqrstuvwxyz23456789';code='';for(let j=0;j<5;j++)code+=a[Math.floor(Math.random()*a.length)];S.code=code;if(!(await api('GET','')))break}
-    const sd=newSd();await api('PUT','',{sd,i:0,c:Date.now(),n:{0:me}});S={...S,m:'online',seat:0,sd,i:0,a:{},err:'',nm:[me,''],me};localStorage.setItem('wyr_room',S.code+':0');loop()}
-  catch(e){S.err='مقدرناش نوصل لسيرفر الغرفة. اتأكد من النت وقواعد Firebase.';R()}
+    const sd=newSd();resetQ();await api('PUT','',{sd,i:0,c:Date.now(),n:{0:me}});S={...S,m:'online',seat:0,sd,i:0,a:{},err:'',nm:[me,''],me};localStorage.setItem('wyr_room',S.code+':0');loop()}
+  catch(e){S.err=offMsg()||'مقدرناش نوصل لسيرفر الغرفة. اتأكد من النت وقواعد Firebase.';R()}
 }
 async function join(code,me){
   code=String(code||'').toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -122,17 +146,24 @@ async function join(code,me){
   me=clean(me||($('#nm')&&$('#nm').value)||saved()[0]);
   if(!me){S.ask=code;S.err='';return R()}
   keep([me,saved()[1]||'']);S.code=code;askNotif();
-  try{const d=await api('GET','');if(!d||d.sd==null){S.code='';S.err='مفيش غرفة بالكود ده.';return R()}
+  try{const d=await api('GET','');if(!d||d.sd==null){S.code='';S.err='مفيش غرفة بالكود ده.';try{localStorage.removeItem('wyr_room')}catch(e){}return R()}
     const saved=(localStorage.getItem('wyr_room')||'').split(':');const seat=saved[0]===code?+saved[1]:1;
-    const nms=fromRoom(d);nms[seat]=me;await api('PUT','/n/'+seat,me);S={...S,m:'online',seat,sd:d.sd,i:d.i||0,a:d.a||{},err:'',nm:nms,me};localStorage.setItem('wyr_room',code+':'+seat);loop()}
-  catch(e){S.code='';S.err='مقدرناش نوصل لسيرفر الغرفة. اتأكد من النت وقواعد Firebase.';R()}
+    resetQ();const nms=fromRoom(d);nms[seat]=me;await api('PUT','/n/'+seat,me);S={...S,m:'online',seat,sd:d.sd,i:d.i||0,a:d.a||{},err:'',nm:nms,me};localStorage.setItem('wyr_room',code+':'+seat);loop()}
+  catch(e){S.code='';S.err=offMsg()||'مقدرناش نوصل لسيرفر الغرفة. اتأكد من النت وقواعد Firebase.';R()}
 }
 function loop(){clearInterval(S.tm);R();S.tm=setInterval(poll,1500)}
 async function poll(){
   if(S.m!=='online')return;
-  try{const d=await api('GET','');if(!d)return;const k=JSON.stringify([d.sd,d.i,d.a,d.n]);if(k===S.last)return;S.last=k;S.sd=d.sd;S.i=d.i||0;S.a=d.a||{};S.nm=fromRoom(d);if(S.me&&!S.nm[S.seat])S.nm[S.seat]=S.me;R()}catch(e){}
+  try{
+    const d=await api('GET','');
+    const wasOff=PQ.off>=2;PQ.off=0;if(!d){if(wasOff)R();return}
+    let i=d.i||0;if(PQ.i!=null){if(i>=PQ.i)PQ.i=null;else i=PQ.i}
+    const a=d.a&&typeof d.a==='object'?d.a:{};
+    for(const q of Object.keys(PQ.a)){if(val(a[q],S.seat)===PQ.a[q])delete PQ.a[q];else{a[q]=a[q]||{};a[q][S.seat]=PQ.a[q]}}
+    const k=JSON.stringify([d.sd,i,a,d.n,waiting()]);if(k===S.last&&!wasOff)return;
+    S.last=k;S.sd=d.sd;S.i=i;S.a=a;S.nm=fromRoom(d);if(S.me&&!S.nm[S.seat])S.nm[S.seat]=S.me;R();
+  }catch(e){PQ.off++;if(PQ.off===2){S.last='';R()}}
 }
-const put=(p,v)=>api('PUT',p,v).catch(()=>{S.err='النت ضعيف، حاول تاني.';R()});
 
 /* ---------- alerts ---------- */
 let SND=localStorage.getItem('wyr_snd')!=='0',seen='',DP=null;const IOS=/iphone|ipad|ipod/i.test(navigator.userAgent||''),TITLE=document.title;
@@ -140,7 +171,9 @@ function ping(msg){
   if(SND){try{const c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.frequency.value=880;g.gain.setValueAtTime(.2,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+.5);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.5)}catch(e){}try{navigator.vibrate&&navigator.vibrate([150,80,150])}catch(e){}}
   if(document.hidden){document.title='🔔 '+msg;try{if(window.Notification&&Notification.permission==='granted')new Notification('تفضّل إيه؟',{body:msg,icon:'icon-192.png'})}catch(e){}}
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)document.title=TITLE});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){document.title=TITLE;if(S.m==='online'){flush();poll()}}});
+addEventListener('online',()=>{if(S.m==='online'){flush();poll()}else if(!S.m&&!S.ask&&!S.setup)R()});
+addEventListener('offline',()=>{if(!S.m&&!S.ask&&!S.setup)R()});
 const askNotif=()=>{try{if(window.Notification&&Notification.permission==='default')Notification.requestPermission()}catch(e){}};
 function watch(A,both,mine){
   if(S.m!=='online')return;const o=val(A,1-S.seat),k=S.i+':'+(both?'b':o!=null&&mine==null?'o':'');
@@ -153,19 +186,19 @@ const val=(A,s)=>A&&A[s]!=null?A[s]:null;
 function pick(c){
   const A=S.a[S.i]=S.a[S.i]||{};
   if(S.m==='local'){A[S.turn]=c;if(S.turn===0){S.turn=1;S.hand=true}}
-  else{if(val(A,1-S.seat)!=null)seen=S.i+':b';A[S.seat]=c;put('/a/'+S.i+'/'+S.seat,c)}
+  else{if(val(A,1-S.seat)!=null)seen=S.i+':b';A[S.seat]=c;PQ.a[S.i]=c;flush()}
   R();
 }
 function next(){
   if(S.m==='local'){S.i++;S.turn=0;S.hand=false;return R()}
-  S.i++;put('/i',S.i);R();
+  S.i++;PQ.i=S.i;R();flush();
 }
 function again(){
   if(S.m==='local'){S={...S,sd:newSd(),i:0,a:{},turn:0,hand:false,err:''};return R()}
-  const sd=nextSd(S.sd);try{localStorage.setItem('wyr_sd',sd)}catch(e){}S.sd=sd;S.i=0;S.a={};S.last='';api('PUT','',{sd,i:0,c:Date.now(),n:nmObj()}).catch(()=>{});R();
+  const sd=nextSd(S.sd);try{localStorage.setItem('wyr_sd',sd)}catch(e){}S.sd=sd;S.i=0;S.a={};S.last='';resetQ();api('PUT','',{sd,i:0,c:Date.now(),n:nmObj()}).catch(()=>{S.err='النت ضعيف، جرّب العبوا تاني بعد شوية.';R()});R();
 }
 function start(){clearInterval(S.tm);S={...S,m:'local',sd:newSd(),i:0,a:{},turn:0,hand:false,err:'',setup:true,nm:['','']};R()}
-function leave(){clearInterval(S.tm);try{localStorage.removeItem('wyr_room')}catch(e){}S={m:'',code:'',seat:0,sd:0,i:0,a:{},turn:0,hand:false,err:'',tm:null,last:''};R()}
+function leave(){clearInterval(S.tm);resetQ();try{localStorage.removeItem('wyr_room')}catch(e){}S={m:'',code:'',seat:0,sd:0,i:0,a:{},turn:0,hand:false,err:'',tm:null,last:''};R()}
 async function invite(){
   const link=location.origin+location.pathname+'?room='+S.code,text='تعالى نلعب "تفضّل إيه؟" — كود الغرفة: '+S.code;
   if(navigator.share){try{await navigator.share({title:'تفضّل إيه؟',text,url:link});return}catch(e){if(e.name==='AbortError')return}}
@@ -196,7 +229,7 @@ function R(){
   if(both)foot=`<div class="res">${a0===a1?'اتفقتوا ✅':'اختلفتوا 😄'}</div><button class="btn" data-act="next">${S.i>=N-1?'النتيجة 🎉':'السؤال اللي بعده'}</button>`;
   else if(online&&mine!=null)foot=`<div class="note">في انتظار ${nm(1-S.seat)}…</div>`;
   else if(!online)foot=`<div class="note">دور ${nm(S.turn)}</div>`;
-  V.innerHTML=head()+`<div class="cnt">سؤال ${S.i+1} من ${N}</div>${opts}${foot}<div class="note err" id="n">${S.err||''}</div>${online?`<button class="sm" style="margin-top:18px" data-act="invite">دعوة 📤 (${S.code})</button> <button class="sm" data-act="leave">خروج</button>`:`<button class="sm" style="margin-top:18px" data-act="leave">الرئيسية</button>`}`;
+  V.innerHTML=head()+`<div class="cnt">سؤال ${S.i+1} من ${N}</div>${opts}${foot}<div class="note err" id="n">${statusText()}</div>${online?`<button class="sm" style="margin-top:18px" data-act="invite">دعوة 📤 (${S.code})</button> <button class="sm" data-act="leave">خروج</button>`:`<button class="sm" style="margin-top:18px" data-act="leave">الرئيسية</button>`}`;
 }
 const head=()=>`<h1>تفضّل إيه؟ 🤔</h1>`;
 function setupScreen(){
@@ -211,6 +244,7 @@ function home(){
   <button class="btn" data-act="local">ابدأ اللعب 🎴</button>
   <button class="btn alt" data-act="onl" aria-expanded="${!!S.open}">🌍 العبوا من مكانين مختلفين</button>
   ${S.open?`<div class="lbx"><p>اعمل غرفة وابعت الكود للتاني، أو ادخل بالكود اللي وصلك.</p><div class="row"><input class="nmi" id="nm" maxlength="20" placeholder="اسمك" value="${esc(saved()[0]||'')}"></div><div class="row"><button class="sm" data-act="new">غرفة جديدة</button></div><div class="row"><input id="rc" maxlength="10" placeholder="كود الغرفة" autocapitalize="off"><button class="sm" data-act="join">دخول</button></div></div>`:''}
+  ${navigator.onLine===false?'<p class="hint" style="color:#fff">مفيش نت دلوقتي. تقدر تلعب على نفس الموبايل، والأونلاين محتاج نت.</p>':''}
   <div class="note err" id="n">${S.err||''}</div>`;
 }
 function end(d){
