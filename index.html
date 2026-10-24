@@ -50,6 +50,8 @@ input{flex:1;min-width:0;padding:10px;border:3px solid var(--ink);border-radius:
 .lbx p{font-size:13px;font-weight:700;line-height:1.8}
 .nmi{direction:rtl}
 main{padding-top:30px}
+a.gm,a.sm{text-decoration:none}
+a.sm{display:inline-block}
 </style>
 </head>
 <body>
@@ -62,6 +64,7 @@ main{padding-top:30px}
 /* Would-you-rather. Same phone, or an online room on its own Firebase project (REST, no SDK).
    Room data: sd (shuffle seed), i (current question), a/<question>/<seat> = 0|1, c (created). */
 const DB='https://foodapp-487b4-default-rtdb.firebaseio.com/wyr/rooms/',N=20;
+const HUB='https://bena-games.vercel.app/';   /* link to the games hub page. Leave it empty and the back button stays hidden. */
 const Q=[
 ["رحلات بسيطة كل شهر","رحلة كبيرة واحدة في السنة"],["أكلة واحدة مفضلة مدى الحياة","كل الأكل ما عدا أكلتك المفضلة"],
 ["الصيف طول السنة","الشتا طول السنة"],["النوم بدري والصحيان بدري","السهر لحد الفجر والنوم للضهر"],
@@ -244,6 +247,7 @@ function home(){
   <button class="btn" data-act="local">ابدأ اللعب 🎴</button>
   <button class="btn alt" data-act="onl" aria-expanded="${!!S.open}">🌍 العبوا من مكانين مختلفين</button>
   ${S.open?`<div class="lbx"><p>اعمل غرفة وابعت الكود للتاني، أو ادخل بالكود اللي وصلك.</p><div class="row"><input class="nmi" id="nm" maxlength="20" placeholder="اسمك" value="${esc(saved()[0]||'')}"></div><div class="row"><button class="sm" data-act="new">غرفة جديدة</button></div><div class="row"><input id="rc" maxlength="10" placeholder="كود الغرفة" autocapitalize="off"><button class="sm" data-act="join">دخول</button></div></div>`:''}
+  ${HUB?`<a class="sm" style="margin-top:18px" href="${HUB}">🏠 كل الألعاب</a>`:''}
   ${navigator.onLine===false?'<p class="hint" style="color:#fff">مفيش نت دلوقتي. تقدر تلعب على نفس الموبايل، والأونلاين محتاج نت.</p>':''}
   <div class="note err" id="n">${S.err||''}</div>`;
 }
@@ -269,7 +273,7 @@ const onClick=e=>{
 V.addEventListener('click',onClick);$('#dbody').addEventListener('click',onClick);
 /* settings drawer */
 function fillDrawer(){
-  $('#dbody').innerHTML=`<button class="gm" data-act="snd">${SND?'🔊 الصوت والاهتزاز شغالين':'🔇 الصوت والاهتزاز مكتومين'}</button><button class="gm" data-act="share">📤 مشاركة اللعبة</button>${DP?'<button class="gm" data-act="inst">📲 ثبّت اللعبة</button>':''}${IOS&&!DP?'<p class="hint">للتثبيت على الآيفون: زرار المشاركة ثم «إضافة إلى الشاشة الرئيسية»</p>':''}`;
+  $('#dbody').innerHTML=`${HUB?`<a class="gm" href="${HUB}">🏠 رجوع لقايمة الألعاب</a>`:''}<button class="gm" data-act="snd">${SND?'🔊 الصوت والاهتزاز شغالين':'🔇 الصوت والاهتزاز مكتومين'}</button><button class="gm" data-act="share">📤 مشاركة اللعبة</button>${DP?'<button class="gm" data-act="inst">📲 ثبّت اللعبة</button>':''}${IOS&&!DP?'<p class="hint">للتثبيت على الآيفون: زرار المشاركة ثم «إضافة إلى الشاشة الرئيسية»</p>':''}`;
 }
 const openD=()=>{fillDrawer();$('#drawer').hidden=false;$('#scrim').hidden=false;$('#menu').setAttribute('aria-expanded','true')};
 const closeD=()=>{$('#drawer').hidden=true;$('#scrim').hidden=true;$('#menu').setAttribute('aria-expanded','false')};
